@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Nexus Agent</string>
+    <string name="channel_name">Nexus Agent status</string>
+    <string name="channel_description">Persistent relay status notification</string>
+    <string name="server_url_hint">Server URL</string>
+    <string name="node_name_hint">Node name</string>
+    <string name="register">Register</string>
+    <string name="start_service">Start service</string>
+    <string name="stop_service">Stop service</string>
+    <string name="open_battery_settings">Open battery settings</string>
+    <string name="node_id_label">Node</string>
+    <string name="score_label">Score</string>
+    <string name="last_heartbeat_label">Last heartbeat</string>
+    <string name="battery_label">Battery</string>
+    <string name="log_title">Log</string>
+    <string name="relay_online">Relay online</string>
+</resources>

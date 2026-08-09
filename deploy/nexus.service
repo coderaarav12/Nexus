@@ -1,0 +1,26 @@
+[Unit]
+Description=Project Nexus private cloud server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=nexus
+Group=nexus
+WorkingDirectory=/opt/nexus/server
+Environment=NODE_ENV=production
+Environment=npm_config_cache=/opt/nexus/server/data/.npm-cache
+ExecStart=/usr/bin/npm start
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/nexus/server/data
+PrivateTmp=true
+RestrictSUIDSGID=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+ProtectKernelModules=true
+
+[Install]
+WantedBy=multi-user.target

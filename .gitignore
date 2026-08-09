@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+server/node_modules/
+
+# Server runtime data (DB, keys, backups, logs) - DO NOT COMMIT SECRETS
+server/data/
+server/.env
+
+# Build outputs
+android/**/build/
+*.apk
+*.aab
+
+# Gradle
+android/**/.gradle/
+
+# IDE / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

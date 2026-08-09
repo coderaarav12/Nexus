@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.NexusAgent" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/nexus_primary</item>
+        <item name="colorPrimaryDark">@color/nexus_primary_dark</item>
+        <item name="colorAccent">@color/nexus_accent</item>
+        <item name="android:statusBarColor">@color/nexus_primary_dark</item>
+        <item name="android:windowBackground">@color/background</item>
+    </style>
+</resources>

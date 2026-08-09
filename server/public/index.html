@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Project Nexus</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Login -->
+  <div id="login" class="login-wrap hidden">
+    <div class="login-card">
+      <div class="login-logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/>
+          <path d="M12 11v5M9.5 13.5h5"/>
+        </svg>
+      </div>
+      <h1 class="login-title">Project Nexus</h1>
+      <p class="login-sub">Private cloud dashboard</p>
+
+      <form id="loginForm" autocomplete="on">
+        <div class="field">
+          <label for="loginUser">Username</label>
+          <input id="loginUser" class="input" type="text" autocomplete="username" required>
+        </div>
+        <div class="field">
+          <label for="loginPass">Password</label>
+          <input id="loginPass" class="input" type="password" autocomplete="current-password" required>
+        </div>
+        <button class="btn primary block" type="submit">Sign in</button>
+      </form>
+
+      <form id="mfaForm" class="hidden" autocomplete="off">
+        <div class="field">
+          <label for="mfaCode">Verification code</label>
+          <input id="mfaCode" class="input code-input" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="6 digits" required>
+        </div>
+        <button class="btn primary block" type="submit">Verify</button>
+      </form>
+
+      <div id="loginErr" class="login-err"></div>
+    </div>
+  </div>
+
+  <!-- App shell -->
+  <div id="app" class="hidden">
+    <div id="scrim" class="scrim hidden"></div>
+
+    <aside id="sidebar" class="sidebar">
+      <div class="brand">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/>
+          <path d="M12 11v5M9.5 13.5h5"/>
+        </svg>
+        <span>Project Nexus</span>
+      </div>
+      <nav id="nav" class="nav"></nav>
+      <div class="sidebar-foot">
+        <div class="user-chip">
+          <div class="chip-avatar" id="chipAvatar">?</div>
+          <div class="chip-text">
+            <div class="chip-name" id="chipName">User</div>
+            <div class="chip-role" id="chipRole">role</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <main id="main" class="main">
+      <header id="topbar" class="topbar">
+        <button id="menuBtn" class="icon-btn" type="button" aria-label="Toggle navigation">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M3 6h18M3 12h18M3 18h18"/>
+          </svg>
+        </button>
+        <h2 id="pageTitle" class="page-title">Dashboard</h2>
+        <div class="topbar-right">
+          <span id="topUser" class="top-user"></span>
+          <span id="topRole" class="badge accent"></span>
+          <button id="logoutBtn" class="btn ghost small" type="button">Log out</button>
+        </div>
+      </header>
+      <div id="view" class="view"></div>
+    </main>
+  </div>
+
+  <!-- Modal -->
+  <div id="modal" class="hidden">
+    <div class="modal-backdrop" id="modalBackdrop"></div>
+    <div class="modal">
+      <div class="modal-head">
+        <h3 id="modalTitle" class="modal-title">Details</h3>
+        <button id="modalClose" class="icon-btn" type="button" aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M18 6 6 18M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      <div id="modalBody" class="modal-body"></div>
+    </div>
+  </div>
+
+  <div id="toasts" class="toasts"></div>
+  <div id="uploadPanel" class="upload-panel hidden"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
