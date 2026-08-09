@@ -170,6 +170,7 @@
   }
 
   function doRequest(path, opts, allowRetry) {
+    opts = opts || {};
     return rawFetch(path, opts).then(function (res) {
       if (res.status === 401 && allowRetry) {
         return tryRefresh().then(function (ok) {
