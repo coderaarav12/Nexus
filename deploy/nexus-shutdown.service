@@ -1,0 +1,11 @@
+[Unit]
+Description=Power off the machine on Nexus dashboard shutdown request
+After=nexus.service
+
+[Service]
+Type=oneshot
+ExecStartPre=/bin/rm -f /opt/nexus/server/data/system/shutdown.request
+ExecStart=/usr/bin/systemctl poweroff
+
+[Install]
+WantedBy=multi-user.target

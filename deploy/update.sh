@@ -32,6 +32,13 @@ step "Installing dependencies"
 sudo -u nexus bash -c 'cd /opt/nexus/server && npm_config_cache=/opt/nexus/server/data/.npm-cache npm ci --omit=dev'
 sudo -u nexus bash -c 'cd /opt/nexus/server && npm_config_cache=/opt/nexus/server/data/.npm-cache npm install --no-save tsx@^4'
 
+step "Installing shutdown units (dashboard Shut down button)"
+for unit in nexus-shutdown.path nexus-shutdown.service; do
+  sudo cp "$REPO/deploy/$unit" "/etc/systemd/system/$unit"
+done
+sudo systemctl daemon-reload
+sudo systemctl enable --now nexus-shutdown.path
+
 step "Restarting nexus service"
 sudo systemctl restart nexus
 

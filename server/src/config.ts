@@ -83,5 +83,8 @@ export const config = {
   refreshTokenDays: num(process.env.REFRESH_TOKEN_DAYS, 90),
   keepVersions: num(process.env.KEEP_VERSIONS, 10),
   versioning: process.env.VERSIONING !== 'false',
-  powerOffCmd: process.env.POWER_OFF_CMD ?? 'sudo -n /usr/bin/systemctl poweroff',
+  // Path unit approach: the server writes this flag file and a root-owned
+  // systemd oneshot (nexus-shutdown) reacts by powering off. This avoids
+  // needing sudo inside a NoNewPrivileges service.
+  shutdownFlagPath: process.env.SHUTDOWN_FLAG ?? path.join(systemDir, 'shutdown.request'),
 };

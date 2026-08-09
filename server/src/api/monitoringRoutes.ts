@@ -1,7 +1,8 @@
 import { Router } from 'express';
-import { exec } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 import { requireAuth, requireAdmin } from '../middleware/auth';
-import { dashboardSummary, listUsers, storageUsage, runServerBackup } from '../services/monitoringService';
+import { dashboardSummary, listUsers, storageUsage, runServerBackup, logActivity } from '../services/monitoringService';
 import { db } from '../db/database';
 import { config } from '../config';
 import { AuthError } from '../services/authService';
@@ -28,13 +29,19 @@ monitoringRouter.post('/admin/backup', requireAdmin, (_req, res) => {
 });
 
 monitoringRouter.post('/admin/shutdown', requireAdmin, (_req, res) => {
-  // Fire-and-forget: the OS goes down moments later, so reply first.
+  // Reply first so the client sees success before the OS goes down.
   res.json({ ok: true, message: 'shutting down' });
-  exec(config.powerOffCmd, { timeout: 10000 }, (err, _stdout, stderr) => {
-    if (err) {
-      console.error('[shutdown] failed:', err.message, stderr);
-    }
-  });
+  logActivity('info', 'Shutdown requested from dashboard');
+  // A root-owned systemd path unit (nexus-shutdown.path) watches this flag
+  // file and powers the machine off. Writing it never needs sudo.
+  try {
+    fs.mkdirSync(path.dirname(config.shutdownFlagPath), { recursive: true });
+    fs.writeFileSync(config.shutdownFlagPath, String(Date.now()));
+  } catch (err) {
+    const msg = (err as Error).message;
+    console.error('[shutdown] flag write failed:', msg);
+    logActivity('error', `Shutdown flag write failed: ${msg}`);
+  }
 });
 
 monitoringRouter.get('/admin/activity', requireAdmin, (_req, res) => {

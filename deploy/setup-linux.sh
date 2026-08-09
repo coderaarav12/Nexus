@@ -147,7 +147,7 @@ DEPLOY_DIR="$SCRIPT_DIR"
 if [ ! -f "$DEPLOY_DIR/nexus.service" ]; then
   DEPLOY_DIR="/opt/nexus-repo/deploy"
 fi
-for unit in nexus.service nexus-export.service nexus-export.timer; do
+for unit in nexus.service nexus-export.service nexus-export.timer nexus-shutdown.path nexus-shutdown.service; do
   [ -f "$DEPLOY_DIR/$unit" ] || die "missing $DEPLOY_DIR/$unit (expected in the deploy/ folder next to this script)"
   $SUDO cp "$DEPLOY_DIR/$unit" "/etc/systemd/system/$unit"
 done
@@ -155,16 +155,7 @@ $SUDO systemctl daemon-reload
 $SUDO systemctl enable --now nexus.service
 $SUDO systemctl enable --now nexus-export.timer
 $SUDO systemctl start nexus-export.service || warn "initial export failed (the 5-min timer will retry)"
-
-step "Passwordless poweroff for the nexus user (dashboard Shut down button)"
-SUDOERS_FILE=/etc/sudoers.d/nexus-poweroff
-if [ -f "$SUDOERS_FILE" ]; then
-  info "sudoers rule already present"
-else
-  printf 'nexus ALL=(root) NOPASSWD: /usr/bin/systemctl poweroff\n' | $SUDO tee "$SUDOERS_FILE" >/dev/null
-  $SUDO chmod 440 "$SUDOERS_FILE"
-  info "added $SUDOERS_FILE"
-fi
+$SUDO systemctl enable --now nexus-shutdown.path
 
 step "Firewall"
 if command -v ufw >/dev/null 2>&1; then
