@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
   createUser,
+  countUsers,
   startLogin,
   completeMfa,
   registerDevice,
@@ -42,11 +43,21 @@ const handle = (fn: (req: any, res: any) => Promise<void> | void) => (req: any, 
   }
 };
 
+authRouter.get('/registration-open', (_req, res) => {
+  res.json({ open: countUsers() === 0 });
+});
+
 authRouter.post(
   '/register',
   handle((req, res) => {
     const { username, password, displayName } = req.body ?? {};
     if (!username || !password) return res.status(400).json({ error: 'username and password required' });
+    const isBootstrap = countUsers() === 0;
+    if (!isBootstrap) {
+      if (!req.user || req.user.role !== 'admin') {
+        return res.status(403).json({ error: 'registration is closed; ask an admin to create your account' });
+      }
+    }
     const user = createUser(username, password, displayName);
     res.status(201).json({ id: user.id, username: user.username, role: user.role });
   }),

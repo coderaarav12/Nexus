@@ -88,6 +88,7 @@
   var grantToken = null;
   var dashTimer = null;
   var dashLoading = false;
+  var dashPaused = false;
   var uploadSession = null;
   var userCache = [];
   var memberDebounce = null;
@@ -238,6 +239,13 @@
     $('#mfaForm').classList.add('hidden');
     $('#loginErr').textContent = '';
     $('#loginErr').className = 'login-err';
+    // Show the register link only while registration is open (no users yet).
+    fetch(API_BASE + '/auth/registration-open').then(function (r) {
+      return r.json();
+    }).then(function (data) {
+      var link = $('#showRegister');
+      if (link) link.parentNode.style.display = (data && data.open) ? '' : 'none';
+    }).catch(function () {});
     if ($('#loginUser')) $('#loginUser').focus();
   }
 
@@ -468,6 +476,7 @@
     'revoke-device': function (el) { revokeDevice(el); },
     'open-result': function (el) { openSearchResult(el); },
     'run-backup': function () { runBackup(); },
+    'dash-pause': function () { toggleDashPause(); },
     'load-2fa': function () { setup2fa(); },
     'mark-read': function () { markNotifsRead(); },
   };
@@ -1191,9 +1200,22 @@
   /* ------------------------------------------------------------------ */
 
   function scheduleDash() {
+    clearInterval(dashTimer);
+    if (dashPaused) return;
     dashTimer = setInterval(function () {
       if (currentRoute() === 'dashboard' && !dashLoading) renderDashboard();
     }, 5000);
+  }
+
+  function toggleDashPause() {
+    dashPaused = !dashPaused;
+    clearInterval(dashTimer);
+    var btn = document.querySelector('[data-act="dash-pause"]');
+    if (btn) {
+      btn.textContent = dashPaused ? 'Resume auto-refresh' : 'Pause auto-refresh';
+      btn.className = 'btn ' + (dashPaused ? 'ghost' : 'primary');
+    }
+    if (!dashPaused) scheduleDash();
   }
 
   function runBackup() {
@@ -1340,7 +1362,8 @@
     $('#view').innerHTML = page(
       '<div class="dash-actions card">' +
       '<button class="btn primary" data-act="run-backup">Run backup now</button>' +
-      '<span class="dim small">Last refresh ' + fmtClock(s.time) + ' - auto-refreshes every 5s</span></div>' +
+      '<button class="btn ghost" data-act="dash-pause">Pause auto-refresh</button>' +
+      '<span class="dim small">Last refresh ' + fmtClock(s.time) + (dashPaused ? ' - auto-refresh paused' : ' - auto-refreshes every 5s') + '</span></div>' +
       section('Server', serverHtml) +
       section('Gateway nodes', '<div class="nodes-grid">' + nodesHtml + '</div>') +
       section('Active transfers',
