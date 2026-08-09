@@ -5,14 +5,27 @@ import type { ItemRow, UserRow } from '../types';
 import { AuthError } from './authService';
 import { canAccessItem, requireWorkspaceAccess } from './sharingService';
 import { contentPath, ensureContentDirs } from '../lib/paths';
+import { isPrivateItem, requirePrivateAccess } from './privateAccess';
 
 export function getItem(id: number): ItemRow | undefined {
   return db.prepare('SELECT * FROM items WHERE id = ?').get(id) as unknown as ItemRow | undefined;
 }
 
+/** True if this item (or any of its ancestors) lives under a private root. */
+export function itemIsPrivate(itemId: number): boolean {
+  let cur = getItem(itemId);
+  let guard = 0;
+  while (cur && guard < 100) {
+    if (cur.private === 1) return true;
+    cur = cur.parent_id ? getItem(cur.parent_id) : undefined;
+    guard++;
+  }
+  return false;
+}
+
 export function ensureVaultRoot(userId: number): ItemRow {
   const existing = db
-    .prepare("SELECT * FROM items WHERE owner_id = ? AND workspace_id IS NULL AND parent_id IS NULL AND kind = 'folder'")
+    .prepare("SELECT * FROM items WHERE owner_id = ? AND workspace_id IS NULL AND parent_id IS NULL AND kind = 'folder' AND private = 0")
     .get(userId) as unknown as ItemRow | undefined;
   if (existing) return existing;
   const now = Date.now();
@@ -56,17 +69,18 @@ export function createFolder(user: UserRow, name: string, parentId: number | nul
     actualParent = parentId ?? vault.id;
     if (parent && parent.owner_id !== user.id) throw new AuthError(403, 'forbidden');
   }
+  const privateFlag = isPrivateItem(parent) ? 1 : 0;
   const now = Date.now();
   const info = db
     .prepare(
-      `INSERT INTO items (owner_id, workspace_id, parent_id, name, kind, created_at, updated_at)
-       VALUES (?,?,?,?,'folder',?,?)`,
+      `INSERT INTO items (owner_id, workspace_id, parent_id, name, kind, private, created_at, updated_at)
+       VALUES (?,?,?,?,'folder',?,?,?)`,
     )
-    .run(user.id, scopeWs ?? null, actualParent, name, now, now);
+    .run(user.id, scopeWs ?? null, actualParent, name, privateFlag, now, now);
   return getItem(Number(info.lastInsertRowid))!;
 }
 
-export function listChildren(user: UserRow, parentId: number | null, workspaceId?: number): ItemRow[] {
+export function listChildren(user: UserRow, parentId: number | null, workspaceId?: number, unlockToken?: string | null): ItemRow[] {
   if (workspaceId) {
     requireWorkspaceAccess(workspaceId, user, 'viewer');
     const root = ensureWorkspaceRoot(workspaceId);
@@ -76,13 +90,14 @@ export function listChildren(user: UserRow, parentId: number | null, workspaceId
     ensureVaultRoot(user.id);
     return db
       .prepare(
-        'SELECT * FROM items WHERE owner_id = ? AND workspace_id IS NULL AND parent_id IS NULL AND deleted = 0 ORDER BY kind DESC, name ASC',
+        'SELECT * FROM items WHERE owner_id = ? AND workspace_id IS NULL AND parent_id IS NULL AND deleted = 0 AND private = 0 ORDER BY kind DESC, name ASC',
       )
       .all(user.id) as unknown as ItemRow[];
   }
   const parent = getItem(parentId);
   if (!parent) throw new AuthError(404, 'folder not found');
   if (!canAccessItem(parent, user, 'viewer')) throw new AuthError(403, 'forbidden');
+  requirePrivateAccess(user, parent, unlockToken);
   return db.prepare('SELECT * FROM items WHERE parent_id = ? AND deleted = 0 ORDER BY kind DESC, name ASC').all(parentId) as unknown as ItemRow[];
 }
 

@@ -17,6 +17,27 @@ export function initDb() {
     db.exec(SCHEMA);
     db.exec('PRAGMA user_version = 1');
   }
+  if (row.user_version < 2) {
+    migrateToV2();
+    db.exec('PRAGMA user_version = 2');
+  }
+}
+
+function migrateToV2() {
+  const cols = db.prepare('PRAGMA table_info(items)').all() as { name: string }[];
+  if (!cols.some((c) => c.name === 'private')) {
+    db.exec('ALTER TABLE items ADD COLUMN private INTEGER NOT NULL DEFAULT 0');
+  }
+  db.exec(`CREATE TABLE IF NOT EXISTS private_folders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    root_item_id INTEGER REFERENCES items(id),
+    enc_key TEXT NOT NULL,
+    password_hash TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );`);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_privfolders_user ON private_folders(user_id);');
 }
 
 export function pruneMetrics(retentionDays: number) {

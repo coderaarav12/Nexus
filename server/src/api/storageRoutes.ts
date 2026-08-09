@@ -12,6 +12,7 @@ import {
 } from '../services/storageService';
 import { AuthError } from '../services/authService';
 import { canAccessItem } from '../services/sharingService';
+import { isPrivateItem, requirePrivateAccess } from '../services/privateAccess';
 
 export const storageRouter = Router();
 
@@ -27,13 +28,15 @@ const handle = (fn: (req: any, res: any) => void) => (req: any, res: any) => {
   }
 };
 
+const unlockToken = (req: any) => (typeof req.headers['x-private-unlock'] === 'string' ? req.headers['x-private-unlock'] : null);
+
 storageRouter.use(requireAuth);
 
 storageRouter.get(
   '/vault',
   handle((req, res) => {
     const { user } = authContext(req);
-    res.json({ items: listChildren(user, null) });
+    res.json({ items: listChildren(user, null, undefined, unlockToken(req)) });
   }),
 );
 
@@ -41,7 +44,7 @@ storageRouter.get(
   '/vault/:parentId',
   handle((req, res) => {
     const { user } = authContext(req);
-    res.json({ items: listChildren(user, Number(req.params.parentId)) });
+    res.json({ items: listChildren(user, Number(req.params.parentId), undefined, unlockToken(req)) });
   }),
 );
 
@@ -88,6 +91,7 @@ storageRouter.get(
     const item = getItem(Number(req.params.itemId));
     if (!item || !canAccessItem(item, user, 'viewer')) return res.status(404).json({ error: 'not found' });
     if (item.kind !== 'file' || !item.sha256) return res.status(400).json({ error: 'not a file' });
+    if (isPrivateItem(item)) requirePrivateAccess(user, item, unlockToken(req));
     const buf = getContentBuffer(item);
     const name = encodeURIComponent(item.name).replace(/'/g, '%27');
     res.set('Content-Type', 'application/octet-stream');

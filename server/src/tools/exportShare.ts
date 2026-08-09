@@ -2,8 +2,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { db } from '../db/database';
-import { getItem, buildItemPath } from '../services/storageService';
+import { getItem, buildItemPath, itemIsPrivate } from '../services/storageService';
 import { contentPath } from '../lib/paths';
+import { unwrapDek, encryptPrivateBlob } from '../lib/crypto';
 import type { ItemRow } from '../types';
 
 const toolDir = path.dirname(fileURLToPath(import.meta.url));
@@ -21,6 +22,16 @@ function main() {
   const users = db.prepare('SELECT id, username FROM users').all() as { id: number; username: string }[];
   const usernameByUser = new Map(users.map((u) => [u.id, u.username]));
   const usernameSet = new Set(users.map((u) => u.username));
+
+  const deks = new Map<number, Buffer>();
+  const pfRows = db.prepare('SELECT user_id, enc_key FROM private_folders').all() as { user_id: number; enc_key: string }[];
+  for (const r of pfRows) {
+    try {
+      deks.set(r.user_id, unwrapDek(r.enc_key));
+    } catch {
+      /* skip broken key */
+    }
+  }
 
   const workspaces = db.prepare('SELECT id, name FROM workspaces').all() as { id: number; name: string }[];
   const wsNameCounts = new Map<string, number>();
@@ -55,16 +66,23 @@ function main() {
     }
     const username = item.owner_id != null ? usernameByUser.get(item.owner_id) : undefined;
     if (!username) return null;
+    if (itemIsPrivate(item.id)) {
+      // The path looks like 'My Vault/Private/...' - remap to 'Private/<user>/...'
+      const pIdx = parts.findIndex((p) => p === 'Private');
+      const rest = pIdx >= 0 ? parts.slice(pIdx + 1) : parts.filter((p) => p !== 'My Vault');
+      return ['Private', safePart(username), ...rest].join('/');
+    }
     return [safePart(username), ...parts].join('/');
   };
 
   const rows = db.prepare("SELECT * FROM items WHERE kind = 'file'").all() as unknown as ItemRow[];
-  const targets = new Map<string, string>();
+  // map: rel path -> { sha, ownerId, isPrivate }
+  const targets = new Map<string, { sha: string; ownerId: number | null; private: boolean }>();
   let totalBytes = 0;
   for (const item of rows) {
     const rel = logicalPath(item);
     if (!rel || !item.sha256) continue;
-    targets.set(rel, item.sha256);
+    targets.set(rel, { sha: item.sha256, ownerId: item.owner_id, private: itemIsPrivate(item.id) });
     totalBytes += item.size;
   }
 
@@ -90,11 +108,12 @@ function main() {
 
   let linked = 0;
   let copied = 0;
+  let encrypted = 0;
   let skipped = 0;
   let missing = 0;
-  for (const [rel, sha] of targets) {
+  for (const [rel, target] of targets) {
     const dest = path.join(shareDir, ...rel.split('/'));
-    const blob = contentPath(sha);
+    const blob = contentPath(target.sha);
     if (!fs.existsSync(blob)) {
       missing++;
       continue;
@@ -115,6 +134,21 @@ function main() {
     }
     fs.mkdirSync(path.dirname(dest), { recursive: true });
     if (fs.existsSync(dest)) fs.unlinkSync(dest);
+    if (target.private && target.ownerId != null) {
+      const dek = deks.get(target.ownerId);
+      if (!dek) {
+        missing++;
+        continue;
+      }
+      try {
+        const cipher = encryptPrivateBlob(dek, fs.readFileSync(blob));
+        fs.writeFileSync(dest, cipher, { mode: 0o600 });
+        encrypted++;
+      } catch {
+        missing++;
+      }
+      continue;
+    }
     try {
       fs.linkSync(blob, dest);
       linked++;
@@ -126,7 +160,7 @@ function main() {
 
   console.log(`[nexus-export] share: ${shareDir}`);
   console.log(
-    `[nexus-export] files: exported=${linked + copied} (linked=${linked}, copied=${copied}) skipped=${skipped} pruned=${pruned} missing=${missing}`,
+    `[nexus-export] files: exported=${linked + copied + encrypted} (linked=${linked}, copied=${copied}, encrypted=${encrypted}) skipped=${skipped} pruned=${pruned} missing=${missing}`,
   );
   console.log(`[nexus-export] total size: ${totalBytes} bytes`);
 }

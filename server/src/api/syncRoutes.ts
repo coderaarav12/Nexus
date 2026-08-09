@@ -45,7 +45,8 @@ syncRouter.post(
   handle((req, res) => {
     const { user, deviceId } = authContext(req);
     if (!deviceId) return res.status(400).json({ error: 'device token required' });
-    const out = createUploadJob(user, deviceId, req.body ?? {}, req.ip);
+    const unlock = typeof req.headers['x-private-unlock'] === 'string' ? req.headers['x-private-unlock'] : null;
+    const out = createUploadJob(user, deviceId, req.body ?? {}, req.ip, unlock);
     res.status(201).json(out);
   }),
 );

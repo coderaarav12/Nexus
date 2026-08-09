@@ -45,6 +45,7 @@ export interface ItemRow {
   mtime: number | null;
   version: number;
   deleted: number;
+  private: number;
   created_at: number;
   updated_at: number;
 }

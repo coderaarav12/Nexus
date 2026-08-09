@@ -89,6 +89,7 @@
   var dashTimer = null;
   var dashLoading = false;
   var dashPaused = false;
+  var privateUnlockToken = null;
   var uploadSession = null;
   var userCache = [];
   var memberDebounce = null;
@@ -156,6 +157,7 @@
     if (opts.body != null && opts.json !== false) headers['Content-Type'] = 'application/json';
     var tok = localStorage.getItem(LS_ACCESS);
     if (tok && !opts.noAuth) headers['Authorization'] = 'Bearer ' + tok;
+    if (privateUnlockToken) headers['x-private-unlock'] = privateUnlockToken;
     for (var k in (opts.headers || {})) headers[k] = opts.headers[k];
     var init = { method: opts.method || 'GET', headers: headers };
     if (opts.body != null) init.body = opts.body;
@@ -451,6 +453,7 @@
       filesCtx.stack.push({ id: id, name: name });
       refreshFilesView();
     },
+    'open-private': function () { openPrivateFolder(); },
     'crumb': function (el) {
       var idx = Number(el.getAttribute('data-idx'));
       filesCtx.stack = filesCtx.stack.slice(0, idx + 1);
@@ -477,6 +480,8 @@
     'open-result': function (el) { openSearchResult(el); },
     'run-backup': function () { runBackup(); },
     'dash-pause': function () { toggleDashPause(); },
+    'priv-set-pw': function () { setPrivatePassword(); },
+    'priv-unlock': function () { unlockPrivateFolder(); },
     'load-2fa': function () { setup2fa(); },
     'mark-read': function () { markNotifsRead(); },
   };
@@ -527,6 +532,14 @@
         '" data-idx="' + idx + '">' + esc(c.name) + '</button>';
     }).join('<span class="crumb-sep">/</span>');
 
+    var privateCard = '';
+    if (filesCtx.mode === 'vault' && filesCtx.stack.length === 1) {
+      privateCard = '<div class="card private-card"><div class="node-head">' +
+        '<span class="node-name">Private folder (encrypted)</span>' +
+        '<button class="btn primary small" data-act="open-private">Open my private folder</button></div>' +
+        '<div class="dim small">Encrypted per-user folder on the network drive. Only you and the admin can view it.</div></div>';
+    }
+
     var rows = items.map(function (it) {
       var icon = it.kind === 'folder' ? ICON_FOLDER : ICON_FILE;
       var size = it.kind === 'folder' ? '--' : fmtBytes(it.size);
@@ -556,7 +569,7 @@
         '<input type="file" id="fileInput" multiple class="hidden-file">' : '') +
       '</div></div>';
 
-    return toolbar +
+    return privateCard + toolbar +
       '<div class="card"><table class="table"><thead><tr><th>Name</th><th>Type</th><th>Size</th><th>Modified</th><th></th></tr></thead>' +
       '<tbody>' + rows + empty + '</tbody></table></div>';
   }
@@ -568,6 +581,11 @@
     filesHtml().then(function (html) {
       host.innerHTML = container ? html : page(html);
     }).catch(function (err) {
+      if (err.message && err.message.indexOf('locked') !== -1 && !privateUnlockToken) {
+        host.innerHTML = page('<div class="card note"><p class="dim">' + esc(err.message) + '</p>' +
+          '<button class="btn primary" data-act="open-private" style="margin-top:10px">Unlock private folder</button></div>');
+        return;
+      }
       host.innerHTML = container ? '<div class="card note"><p class="dim">' + esc(err.message) + '</p></div>' : errHtml(err.message);
     });
   }
@@ -585,6 +603,46 @@
       toast('Folder created', 'ok');
       refreshFilesView();
     }).catch(function (err) { toast(err.message, 'err'); });
+  }
+
+  function openPrivateFolder() {
+    request('/private/status').then(function (data) {
+      var st = data && data.status;
+      if (!st) throw new Error('No private folder');
+      if (st.hasPassword && !privateUnlockToken) {
+        openPrivateUnlockModal();
+        return;
+      }
+      filesCtx.mode = 'vault';
+      filesCtx.stack = [{ id: null, name: 'My Vault' }, { id: st.id, name: 'Private' }];
+      refreshFilesView();
+    }).catch(function (err) { toast(err.message, 'err'); });
+  }
+
+  function openPrivateUnlockModal() {
+    openModal(
+      '<h3 class="modal-title">Private folder locked</h3>' +
+      '<p class="dim">Enter the private folder password to unlock and view its contents.</p>' +
+      '<form id="privUnlockForm" class="member-form">' +
+      '<input id="privUnlockPw" class="input" type="password" placeholder="Private folder password" autocomplete="off" required>' +
+      '<button class="btn primary" type="submit">Unlock</button></form>' +
+      '<p class="login-err" id="privUnlockErr"></p>'
+    );
+    $('#privUnlockForm').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var pw = $('#privUnlockPw').value;
+      request('/private/unlock', {
+        method: 'POST',
+        body: JSON.stringify({ password: pw }),
+      }).then(function (data) {
+        privateUnlockToken = data.token;
+        closeModal();
+        openPrivateFolder();
+      }).catch(function (err) {
+        var errEl = $('#privUnlockErr');
+        if (errEl) { errEl.textContent = err.message; errEl.className = 'login-err'; }
+      });
+    });
   }
 
   function deleteItem(el) {
@@ -1129,6 +1187,9 @@
         ) +
         section('Two-factor authentication', twofa) +
         '</div>' +
+        section('Private folder (encrypted)',
+          '<div id="privSection" class="dim">Loading private folder...</div>'
+        ) +
         section('Notifications',
           '<button class="btn ghost small" data-act="mark-read" style="margin-bottom:10px">Mark all read</button>' + notifRows
         )
@@ -1137,7 +1198,59 @@
       $('#pwForm').addEventListener('submit', changePassword);
       var d2fa = $('#disable2faForm');
       if (d2fa) d2fa.addEventListener('submit', disable2fa);
+      loadPrivateSection();
     }).catch(function (err) { $('#view').innerHTML = errHtml(err.message); });
+  }
+
+  function loadPrivateSection() {
+    var host = $('#privSection');
+    if (!host) return;
+    request('/private/status').then(function (data) {
+      var st = data && data.status;
+      if (!st) { host.innerHTML = '<p class="dim">No private folder.</p>'; return; }
+      var lockTxt = st.hasPassword
+        ? (privateUnlockToken ? '<span class="badge ok">Unlocked</span>' : '<span class="badge warn">Locked</span>')
+        : '<span class="badge info">No password set</span>';
+      var encTxt = st.encrypted ? '<span class="badge ok">Encrypted</span>' : '<span class="badge bad">Not encrypted</span>';
+      host.innerHTML =
+        '<div class="config-list">' +
+        '<div class="config-item"><div class="config-key">Folder</div><div class="config-val">' + esc(st.name || 'Private') + ' (N:\\Private\\' + esc(me.username || '') + '\\)</div></div>' +
+        '<div class="config-item"><div class="config-key">Status</div><div class="config-val">' + lockTxt + ' ' + encTxt + '</div></div>' +
+        '</div>' +
+        '<div class="member-form" style="margin-top:10px">' +
+        '<input id="privPw" class="input" type="password" placeholder="' + (st.hasPassword ? 'New password (blank = clear)' : 'Set password') + '">' +
+        '<button class="btn primary" data-act="priv-set-pw">' + (st.hasPassword ? 'Change' : 'Set password') + '</button>' +
+        (st.hasPassword ? '<button class="btn ghost" data-act="priv-unlock">Unlock</button>' : '') +
+        '</div>' +
+        '<p class="dim small" style="margin-top:8px">Files in your private folder are encrypted on the network drive. Only you and the admin can view them. Each device you connect syncs into this folder.</p>';
+    }).catch(function (err) {
+      host.innerHTML = '<p class="dim">' + esc(err.message) + '</p>';
+    });
+  }
+
+  function setPrivatePassword() {
+    var pw = $('#privPw') ? $('#privPw').value : '';
+    request('/private/password', {
+      method: 'POST',
+      body: JSON.stringify({ next: pw }),
+    }).then(function () {
+      privateUnlockToken = null;
+      toast(pw ? 'Private folder password set' : 'Private folder password cleared', 'ok');
+      loadPrivateSection();
+    }).catch(function (err) { toast(err.message, 'err'); });
+  }
+
+  function unlockPrivateFolder() {
+    var pw = $('#privPw') ? $('#privPw').value : '';
+    if (!pw) { toast('Enter the private folder password', 'err'); return; }
+    request('/private/unlock', {
+      method: 'POST',
+      body: JSON.stringify({ password: pw }),
+    }).then(function (data) {
+      privateUnlockToken = data.token;
+      toast('Private folder unlocked', 'ok');
+      loadPrivateSection();
+    }).catch(function (err) { toast(err.message, 'err'); });
   }
 
   function changePassword(e) {

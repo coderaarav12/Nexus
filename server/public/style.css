@@ -577,6 +577,11 @@ button { font-family: inherit; cursor: pointer; }
 .inflight { background: var(--bg-soft); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
 .inflight .bar { margin: 6px 0; }
 
+.private-card {
+  border-color: rgba(46, 179, 165, 0.35);
+  background: linear-gradient(160deg, rgba(24, 56, 52, 0.35), rgba(14, 22, 40, 0.9));
+}
+
 /* ---------- workspaces ---------- */
 
 .ws-grid { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }

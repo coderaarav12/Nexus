@@ -15,6 +15,7 @@ import {
   buildItemPath,
 } from './storageService';
 import { canAccessItem, requireWorkspaceAccess, getUserRole } from './sharingService';
+import { isPrivateItem, requirePrivateAccess } from './privateAccess';
 import { indexItem } from './searchService';
 import { contentPath, ensureContentDirs, contentExists } from '../lib/paths';
 
@@ -47,7 +48,7 @@ export function findUploadTarget(user: UserRow, parentId: number | null, workspa
     .get(parentId, filename) as unknown as ItemRow | undefined;
 }
 
-export function resolveParent(user: UserRow, parentId: number | null, workspaceId: number | null): { parentId: number | null; scopeWs: number | null } {
+export function resolveParent(user: UserRow, parentId: number | null, workspaceId: number | null, unlockToken?: string | null): { parentId: number | null; scopeWs: number | null } {
   if (workspaceId) {
     requireWorkspaceAccess(workspaceId, user, 'editor');
     const root = ensureWorkspaceRoot(workspaceId);
@@ -61,6 +62,7 @@ export function resolveParent(user: UserRow, parentId: number | null, workspaceI
       return { parentId, scopeWs: parent.workspace_id };
     }
     if (parent.owner_id !== user.id) throw new AuthError(403, 'forbidden');
+    if (isPrivateItem(parent)) requirePrivateAccess(user, parent, unlockToken);
     return { parentId, scopeWs: null };
   }
   const root = ensureVaultRoot(user.id);
@@ -88,7 +90,7 @@ export interface UploadJobResult {
   noChange: boolean;
 }
 
-export function createUploadJob(user: UserRow, deviceId: number, req: UploadRequest, remoteIp?: string): UploadJobResult {
+export function createUploadJob(user: UserRow, deviceId: number, req: UploadRequest, remoteIp?: string, unlockToken?: string | null): UploadJobResult {
   const filename = req.filename;
   if (!filename || filename.includes('/') || filename.includes('\\') || filename === '..') {
     throw new AuthError(400, 'invalid filename');
@@ -98,7 +100,8 @@ export function createUploadJob(user: UserRow, deviceId: number, req: UploadRequ
   if (!sha256 || !/^[a-f0-9]{64}$/i.test(sha256)) throw new AuthError(400, 'valid sha256 required');
   if (!Number.isFinite(size) || size < 0) throw new AuthError(400, 'invalid size');
 
-  const { parentId, scopeWs } = resolveParent(user, req.parentId ?? null, req.workspaceId ?? null);
+  const { parentId, scopeWs } = resolveParent(user, req.parentId ?? null, req.workspaceId ?? null, unlockToken);
+  const privateFlag = parentId && isPrivateItem(getItem(parentId)) ? 1 : 0;
   let existing = findUploadTarget(user, parentId, scopeWs, filename);
   let item: ItemRow;
 
@@ -111,10 +114,10 @@ export function createUploadJob(user: UserRow, deviceId: number, req: UploadRequ
     const now = Date.now();
     const info = db
       .prepare(
-        `INSERT INTO items (owner_id, workspace_id, parent_id, name, kind, sha256, size, mtime, version, created_at, updated_at)
-         VALUES (?,?,?,?,'file',NULL,?,?,1,?,?)`,
+        `INSERT INTO items (owner_id, workspace_id, parent_id, name, kind, sha256, size, mtime, version, private, created_at, updated_at)
+         VALUES (?,?,?,?,'file',NULL,?,?,1,?,?,?)`,
       )
-      .run(user.id, scopeWs, parentId, filename, size, req.mtime ?? now, now, now);
+      .run(user.id, scopeWs, parentId, filename, size, req.mtime ?? now, privateFlag, now, now);
     item = getItem(Number(info.lastInsertRowid))!;
   }
 

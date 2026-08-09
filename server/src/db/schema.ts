@@ -90,6 +90,7 @@ CREATE TABLE IF NOT EXISTS items (
   mtime INTEGER,
   version INTEGER NOT NULL DEFAULT 1,
   deleted INTEGER NOT NULL DEFAULT 0,
+  private INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
@@ -179,6 +180,17 @@ CREATE TABLE IF NOT EXISTS device_sync_state (
   deleted INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (device_id, item_id)
 );
+
+CREATE TABLE IF NOT EXISTS private_folders (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+  root_item_id INTEGER REFERENCES items(id),
+  enc_key TEXT NOT NULL,
+  password_hash TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_privfolders_user ON private_folders(user_id);
 
 CREATE TABLE IF NOT EXISTS notifications (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
