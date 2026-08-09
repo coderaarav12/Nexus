@@ -83,4 +83,5 @@ export const config = {
   refreshTokenDays: num(process.env.REFRESH_TOKEN_DAYS, 90),
   keepVersions: num(process.env.KEEP_VERSIONS, 10),
   versioning: process.env.VERSIONING !== 'false',
+  powerOffCmd: process.env.POWER_OFF_CMD ?? 'sudo -n /usr/bin/systemctl poweroff',
 };

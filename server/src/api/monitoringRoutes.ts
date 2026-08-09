@@ -1,8 +1,10 @@
 import { Router } from 'express';
+import { exec } from 'node:child_process';
 import { requireAuth, requireAdmin } from '../middleware/auth';
 import { dashboardSummary, listUsers, storageUsage, runServerBackup } from '../services/monitoringService';
 import { db } from '../db/database';
 import { config } from '../config';
+import { AuthError } from '../services/authService';
 
 export const monitoringRouter = Router();
 
@@ -23,6 +25,16 @@ monitoringRouter.get('/admin/storage', requireAdmin, (_req, res) => {
 monitoringRouter.post('/admin/backup', requireAdmin, (_req, res) => {
   const out = runServerBackup();
   res.json(out);
+});
+
+monitoringRouter.post('/admin/shutdown', requireAdmin, (_req, res) => {
+  // Fire-and-forget: the OS goes down moments later, so reply first.
+  res.json({ ok: true, message: 'shutting down' });
+  exec(config.powerOffCmd, { timeout: 10000 }, (err, _stdout, stderr) => {
+    if (err) {
+      console.error('[shutdown] failed:', err.message, stderr);
+    }
+  });
 });
 
 monitoringRouter.get('/admin/activity', requireAdmin, (_req, res) => {

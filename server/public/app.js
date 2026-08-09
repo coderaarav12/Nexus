@@ -479,6 +479,7 @@
     'revoke-device': function (el) { revokeDevice(el); },
     'open-result': function (el) { openSearchResult(el); },
     'run-backup': function () { runBackup(); },
+    'shutdown-server': function () { shutdownServer(); },
     'dash-pause': function () { toggleDashPause(); },
     'priv-set-pw': function () { setPrivatePassword(); },
     'priv-unlock': function () { unlockPrivateFolder(); },
@@ -1347,6 +1348,13 @@
     }).catch(function (err) { toast(err.message, 'err'); });
   }
 
+  function shutdownServer() {
+    if (!confirmAction('Shut down the server now? You will need to physically press the power button on the laptop to turn it back on.')) return;
+    request('/monitor/admin/shutdown', { method: 'POST' }).then(function () {
+      toast('Shutting down the server now...', 'ok');
+    }).catch(function (err) { toast(err.message, 'err'); });
+  }
+
   function renderDashboard() {
     clearInterval(dashTimer);
     if (!isAdmin()) { renderAdminRequired(); return; }
@@ -1393,6 +1401,7 @@
       '<div class="dash-actions-right">' +
       '<button class="btn ghost" data-act="dash-pause">' + (dashPaused ? 'Resume auto-refresh' : 'Pause auto-refresh') + '</button>' +
       '<button class="btn primary" data-act="run-backup">Run backup now</button>' +
+      '<button class="btn danger" data-act="shutdown-server">Shut down server</button>' +
       '</div></div>' +
       section('Server', '<div id="dash-server">' + serverHtml(summary.server) + '</div>') +
       section('Gateway nodes', '<div id="dash-nodes">' + nodesHtml(summary) + '</div>') +
