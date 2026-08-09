@@ -30,6 +30,24 @@
           <input id="loginPass" class="input" type="password" autocomplete="current-password" required>
         </div>
         <button class="btn primary block" type="submit">Sign in</button>
+        <p class="login-switch">No account? <a href="#" id="showRegister">Register</a></p>
+      </form>
+
+      <form id="registerForm" class="hidden" autocomplete="on">
+        <div class="field">
+          <label for="regUser">Username</label>
+          <input id="regUser" class="input" type="text" autocomplete="username" required>
+        </div>
+        <div class="field">
+          <label for="regName">Display name (optional)</label>
+          <input id="regName" class="input" type="text" autocomplete="name">
+        </div>
+        <div class="field">
+          <label for="regPass">Password</label>
+          <input id="regPass" class="input" type="password" autocomplete="new-password" minlength="8" required>
+        </div>
+        <button class="btn primary block" type="submit">Create account</button>
+        <p class="login-switch">Already have an account? <a href="#" id="showLogin">Sign in</a></p>
       </form>
 
       <form id="mfaForm" class="hidden" autocomplete="off">

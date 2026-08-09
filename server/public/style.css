@@ -184,6 +184,17 @@ button { font-family: inherit; cursor: pointer; }
   min-height: 18px;
 }
 
+.login-err.ok { color: var(--green, #3ddc84); }
+
+.login-switch {
+  margin: 16px 0 0;
+  text-align: center;
+  font-size: 13.5px;
+  color: var(--text-dim);
+}
+.login-switch a { color: var(--accent); text-decoration: none; font-weight: 600; }
+.login-switch a:hover { text-decoration: underline; }
+
 /* ---------- app shell ---------- */
 
 .app { min-height: 100vh; }

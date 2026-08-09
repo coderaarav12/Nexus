@@ -233,8 +233,10 @@
     $('#login').classList.remove('hidden');
     $('#app').classList.add('hidden');
     $('#loginForm').classList.remove('hidden');
+    $('#registerForm').classList.add('hidden');
     $('#mfaForm').classList.add('hidden');
     $('#loginErr').textContent = '';
+    $('#loginErr').className = 'login-err';
     if ($('#loginUser')) $('#loginUser').focus();
   }
 
@@ -1515,6 +1517,47 @@
       $('#loginErr').textContent = err.message;
     });
   });
+
+  $('#registerForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var u = $('#regUser').value.trim();
+    var n = $('#regName').value.trim();
+    var p = $('#regPass').value;
+    $('#loginErr').textContent = '';
+    fetchJson('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ username: u, password: p, displayName: n || undefined }),
+    }).then(function () {
+      $('#loginErr').textContent = 'Account created. Sign in with your new credentials.';
+      $('#loginErr').className = 'login-err ok';
+      showLoginForm();
+      $('#loginUser').value = u;
+      $('#loginPass').value = '';
+      $('#loginPass').focus();
+    }).catch(function (err) {
+      $('#loginErr').textContent = err.message;
+    });
+  });
+
+  $('#showRegister').addEventListener('click', function (e) {
+    e.preventDefault();
+    showRegisterForm();
+  });
+
+  $('#showLogin').addEventListener('click', function (e) {
+    e.preventDefault();
+    showLoginForm();
+  });
+
+  function showLoginForm() {
+    $('#loginForm').classList.remove('hidden');
+    $('#registerForm').classList.add('hidden');
+  }
+
+  function showRegisterForm() {
+    $('#loginForm').classList.add('hidden');
+    $('#registerForm').classList.remove('hidden');
+  }
 
   $('#mfaForm').addEventListener('submit', function (e) {
     e.preventDefault();
