@@ -488,6 +488,16 @@
     if (fn) fn(el, e);
   });
 
+  document.addEventListener('click', function (e) {
+    var el = e.target.closest ? e.target.closest('[data-mask]') : null;
+    if (!el) return;
+    el.classList.toggle('revealed');
+  });
+
+  function maskedHtml(value) {
+    return '<span class="masked" data-mask title="Click to reveal">' + value + '</span>';
+  }
+
   /* ------------------------------------------------------------------ */
   /* Files page                                                          */
   /* ------------------------------------------------------------------ */
@@ -1312,7 +1322,7 @@
     var disk = s.storage || {};
 
     return '<div class="grid stats">' +
-      stat('Hostname', esc(s.hostname || '--')) +
+      stat('Hostname', maskedHtml(esc(s.hostname || '--'))) +
       stat('Platform', esc(s.platform || '--')) +
       stat('Architecture', esc(s.arch || '--')) +
       stat('Uptime', fmtDur(s.uptime)) +
@@ -1338,7 +1348,7 @@
       stat('Storage free', fmtBytes(disk.free) + ' / ' + fmtBytes(disk.total), pct(disk.free, disk.total)) +
       stat('Network in', fmtRate(s.net ? s.net.rxBytesPerSec : 0)) +
       stat('Network out', fmtRate(s.net ? s.net.txBytesPerSec : 0)) +
-      stat('LAN addresses', esc((s.addresses || []).join(', ') || '--')) +
+      stat('LAN addresses', maskedHtml(esc((s.addresses || []).join(', ') || '--'))) +
       '</div>' +
       (s.battery && s.battery.present ?
         '<div class="grid stats">' +
@@ -1390,7 +1400,7 @@
         '<td><div style="min-width:120px">' + bar(pct(t.bytes_done, t.total_bytes)) + '</div>' +
         '<span class="small dim">' + fmtBytes(t.bytes_done) + ' / ' + fmtBytes(t.total_bytes) + '</span></td>' +
         '<td>' + esc(t.node_name || '--') + '</td>' +
-        '<td>' + esc(t.username || '--') + '</td></tr>';
+        '<td>' + maskedHtml(esc(t.username || '--')) + '</td></tr>';
     }).join('') || '<tr><td colspan="5" class="empty">No active transfers</td></tr>';
     return rows;
   }
@@ -1402,7 +1412,7 @@
         '<td><span class="badge ' + (t.direction === 'upload' ? 'info' : 'ok') + '">' + esc(t.direction) + '</span></td>' +
         '<td class="dim">' + esc(t.error || '--') + '</td>' +
         '<td>' + esc(t.node_name || '--') + '</td>' +
-        '<td>' + esc(t.username || '--') + '</td>' +
+        '<td>' + maskedHtml(esc(t.username || '--')) + '</td>' +
         '<td>' + fmtTime(t.updated_at) + '</td></tr>';
     }).join('') || '<tr><td colspan="6" class="empty">No recent failures</td></tr>';
     return rows;
@@ -1431,7 +1441,7 @@
 
   function configHtml(cfg) {
     return Object.keys(cfg || {}).map(function (k) {
-      return '<div class="config-item"><div class="config-key">' + esc(k) + '</div><div class="config-val">' + esc(cfg[k]) + '</div></div>';
+      return '<div class="config-item"><div class="config-key">' + esc(k) + '</div><div class="config-val">' + maskedHtml(esc(cfg[k])) + '</div></div>';
     }).join('');
   }
 

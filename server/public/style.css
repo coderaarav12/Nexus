@@ -545,6 +545,25 @@ button { font-family: inherit; cursor: pointer; }
 
 .dash-last { white-space: nowrap; }
 
+/* ---------- privacy mask ---------- */
+
+.masked {
+  filter: blur(7px);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  display: inline-block;
+  padding: 0 2px;
+  transition: filter 0.25s ease;
+}
+.masked:hover { filter: blur(5px); }
+.masked.revealed {
+  filter: none;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.masked.revealed:hover { filter: none; }
+
 .nodes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
 
 .node-card { margin-bottom: 0; }
