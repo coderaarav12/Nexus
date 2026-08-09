@@ -174,6 +174,8 @@ export function createDownloadJob(user: UserRow, deviceId: number, itemId: numbe
   if (!item || !canAccessItem(item, user, 'viewer')) throw new AuthError(404, 'file not found');
   if (item.kind !== 'file' || !item.sha256) throw new AuthError(400, 'not a downloadable file');
   if (!contentExists(item.sha256, item.size)) throw new AuthError(500, 'content missing on server');
+  // Private files are never served to devices via the sync engine.
+  if (isPrivateItem(item)) throw new AuthError(403, 'private folder is not available to devices');
 
   const route = chooseRoute(remoteIp);
   const jobId = randomUUID();
@@ -327,7 +329,7 @@ export function failTransferById(id: number, error: string) {
 
 // ---------- incremental sync (manifest diff) ----------
 
-function serverManifest(user: UserRow): Map<string, { itemId: number; sha256: string | null; size: number; mtime: number | null; kind: string }> {
+function serverManifest(user: UserRow, unlockToken?: string | null): Map<string, { itemId: number; sha256: string | null; size: number; mtime: number | null; kind: string }> {
   const map = new Map<string, { itemId: number; sha256: string | null; size: number; mtime: number | null; kind: string }>();
   const root = ensureVaultRoot(user.id);
   const walk = (parentId: number, prefix: string) => {
@@ -335,6 +337,8 @@ function serverManifest(user: UserRow): Map<string, { itemId: number; sha256: st
     for (const r of rows) {
       const path = prefix ? `${prefix}/${r.name}` : r.name;
       if (r.kind === 'folder') {
+        // Private folders never sync to devices; they live on the encrypted share.
+        if (isPrivateItem(r)) continue;
         walk(r.id, path);
       } else {
         map.set(path, { itemId: r.id, sha256: r.sha256, size: r.size, mtime: r.mtime, kind: r.kind });

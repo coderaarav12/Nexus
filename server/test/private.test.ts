@@ -4,8 +4,8 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { initDb } from '../src/db/database';
 import { createUser, authenticatePassword, startLogin, registerDevice, AuthError } from '../src/services/authService';
-import { createFolder, getItem, listChildren, getContentBuffer } from '../src/services/storageService';
-import { createUploadJob, storeUploadChunk, completeUpload } from '../src/services/syncService';
+import { createFolder, getItem, listChildren, getContentBuffer, ensureVaultRoot } from '../src/services/storageService';
+import { createUploadJob, storeUploadChunk, completeUpload, createDownloadJob, diffManifest } from '../src/services/syncService';
 import {
   ensurePrivateRoot,
   getPrivateRoot,
@@ -150,4 +150,39 @@ test('stored private content is encrypted and getContentBuffer returns plaintext
   assert.equal(isPrivateItem(item), true);
   assert.equal(item.private, 1);
   assert.deepEqual(getContentBuffer(item), buf);
+});
+
+test('device sync manifest excludes private subtree', () => {
+  const user = makeUser('priv_jack');
+  const { deviceId } = registerDevice(startLogin(user.username, 'password123').grantToken, 'priv-device3', 'android', '14');
+  const root = ensureVaultRoot(user.id);
+  getPrivateRoot(user); // creates the 'Private' root under vault
+  // Put a normal file in the vault and a private file in the private root.
+  const normal = upload(user, deviceId, root.id, 'open.txt', Buffer.from('public stuff'));
+  const privRoot = getPrivateRoot(user);
+  const priv = upload(user, deviceId, privRoot.id, 'secret.txt', Buffer.from('secret stuff'));
+  void normal;
+
+  // Even unlocked, the agent manifest must NOT mention the private file.
+  const diff = diffManifest(user, deviceId, []);
+  const paths = diff.toDownload.map((d) => d.path);
+  assert.ok(paths.includes('open.txt'));
+  assert.ok(!paths.some((p) => p.includes('Private')));
+  assert.ok(!paths.some((p) => p.includes('secret.txt')));
+  assert.ok(priv.itemId > 0);
+});
+
+test('device sync download of a private file is rejected', () => {
+  const user = makeUser('priv_kevin');
+  const { deviceId } = registerDevice(startLogin(user.username, 'password123').grantToken, 'priv-device4', 'android', '14');
+  const privRoot = getPrivateRoot(user);
+  const job = upload(user, deviceId, privRoot.id, 'classified.bin', Buffer.from('top secret binary'));
+  assert.throws(
+    () => createDownloadJob(user, deviceId, job.itemId),
+    (e: AuthError) => e.status === 403,
+  );
+  // The same user's normal files still download fine.
+  const root = ensureVaultRoot(user.id);
+  const normal = upload(user, deviceId, root.id, 'plain.bin', Buffer.from('fine'));
+  assert.ok(createDownloadJob(user, deviceId, normal.itemId).jobId);
 });
