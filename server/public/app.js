@@ -1203,7 +1203,7 @@
     clearInterval(dashTimer);
     if (dashPaused) return;
     dashTimer = setInterval(function () {
-      if (currentRoute() === 'dashboard' && !dashLoading) renderDashboard();
+      if (currentRoute() === 'dashboard' && !dashLoading) refreshDashboard();
     }, 5000);
   }
 
@@ -1235,7 +1235,8 @@
       request('/monitor/dashboard/summary'),
       request('/monitor/admin/config'),
     ]).then(function (results) {
-      renderDashboardHtml(results[0], results[1]);
+      $('#view').innerHTML = renderDashboardHtml(results[0], results[1]);
+      flashDash();
     }).catch(function (err) {
       $('#view').innerHTML = errHtml(err.message);
     }).then(function () {
@@ -1244,13 +1245,73 @@
     });
   }
 
+  function refreshDashboard() {
+    if (!isAdmin() || currentRoute() !== 'dashboard') return;
+    request('/monitor/dashboard/summary').then(function (summary) {
+      patchDashboard(summary);
+    }).catch(function () {});
+  }
+
+  function flashDash() {
+    var live = document.querySelector('.dash-live');
+    if (live) {
+      live.classList.add('flash');
+      setTimeout(function () { if (live) live.classList.remove('flash'); }, 600);
+    }
+  }
+
   function renderDashboardHtml(summary, cfg) {
+    return page(
+      '<div class="dash-actions card">' +
+      '<div class="dash-actions-left">' +
+      '<span class="dash-live"><i class="live-dot"></i>LIVE</span>' +
+      '<span class="dash-last dim small">Last refresh ' + fmtClock(summary.server && summary.server.time) + (dashPaused ? ' - paused' : ' - 5s') + '</span>' +
+      '</div>' +
+      '<div class="dash-actions-right">' +
+      '<button class="btn ghost" data-act="dash-pause">' + (dashPaused ? 'Resume auto-refresh' : 'Pause auto-refresh') + '</button>' +
+      '<button class="btn primary" data-act="run-backup">Run backup now</button>' +
+      '</div></div>' +
+      section('Server', '<div id="dash-server">' + serverHtml(summary.server) + '</div>') +
+      section('Gateway nodes', '<div id="dash-nodes">' + nodesHtml(summary) + '</div>') +
+      section('Active transfers',
+        '<table class="table"><thead><tr><th>Job</th><th>Direction</th><th>Progress</th><th>Node</th><th>User</th></tr></thead>' +
+        '<tbody id="dash-transfers-active">' + activeRowsHtml(summary.transfers) + '</tbody></table>'
+      ) +
+      section('Recent failed transfers',
+        '<table class="table"><thead><tr><th>Job</th><th>Direction</th><th>Error</th><th>Node</th><th>User</th><th>Time</th></tr></thead>' +
+        '<tbody id="dash-transfers-failed">' + failedRowsHtml(summary.transfers) + '</tbody></table>'
+      ) +
+      section('Storage and counts', '<div id="dash-counts">' + countsHtml(summary) + '</div>') +
+      section('Recent activity', '<div id="dash-feed">' + feedHtml(summary) + '</div>') +
+      section('Server config', '<div class="config-list">' + configHtml(cfg) + '</div>')
+    );
+  }
+
+  function patchDashboard(summary) {
     var s = summary.server || {};
+    var ds = $('#dash-server');
+    if (ds) ds.innerHTML = serverHtml(s);
+    var dn = $('#dash-nodes');
+    if (dn) dn.innerHTML = nodesHtml(summary);
+    var ta = $('#dash-transfers-active');
+    if (ta) ta.innerHTML = activeRowsHtml(summary.transfers);
+    var tf = $('#dash-transfers-failed');
+    if (tf) tf.innerHTML = failedRowsHtml(summary.transfers);
+    var dc = $('#dash-counts');
+    if (dc) dc.innerHTML = countsHtml(summary);
+    var df = $('#dash-feed');
+    if (df) df.innerHTML = feedHtml(summary);
+    var last = document.querySelector('.dash-last');
+    if (last) last.textContent = 'Last refresh ' + fmtClock(s.time) + (dashPaused ? ' - paused' : ' - 5s');
+    flashDash();
+  }
+
+  function serverHtml(s) {
+    s = s || {};
     var ram = s.ram || {};
     var disk = s.storage || {};
 
-    var serverHtml =
-      '<div class="grid stats">' +
+    return '<div class="grid stats">' +
       stat('Hostname', esc(s.hostname || '--')) +
       stat('Platform', esc(s.platform || '--')) +
       stat('Architecture', esc(s.arch || '--')) +
@@ -1289,8 +1350,10 @@
       mountsHtml(s) +
       thermalHtml(s) +
       topProcHtml(s.processes);
+  }
 
-    var nodesHtml = (summary.nodes || []).map(function (n) {
+  function nodesHtml(summary) {
+    var nodes = (summary.nodes || []).map(function (n) {
       var status = n.status === 'online'
         ? '<span class="badge ok">online</span>'
         : '<span class="badge bad">offline</span>';
@@ -1316,9 +1379,12 @@
         kpi('RAM free', fmtBytes(n.ramAvailable) + ' / ' + fmtBytes(n.ramTotal)) +
         '</div>' + inFlight + '</div>';
     }).join('') || '<div class="card note"><p class="dim">No gateway nodes registered.</p></div>';
+    return '<div class="nodes-grid">' + nodes + '</div>';
+  }
 
-    var transfers = summary.transfers || {};
-    var activeRows = (transfers.active || []).map(function (t) {
+  function activeRowsHtml(transfers) {
+    transfers = transfers || {};
+    var rows = (transfers.active || []).map(function (t) {
       return '<tr><td class="mono">' + esc(t.job_id) + '</td>' +
         '<td><span class="badge ' + (t.direction === 'upload' ? 'info' : 'ok') + '">' + esc(t.direction) + '</span></td>' +
         '<td><div style="min-width:120px">' + bar(pct(t.bytes_done, t.total_bytes)) + '</div>' +
@@ -1326,8 +1392,12 @@
         '<td>' + esc(t.node_name || '--') + '</td>' +
         '<td>' + esc(t.username || '--') + '</td></tr>';
     }).join('') || '<tr><td colspan="5" class="empty">No active transfers</td></tr>';
+    return rows;
+  }
 
-    var failedRows = (transfers.recentFailed || []).map(function (t) {
+  function failedRowsHtml(transfers) {
+    transfers = transfers || {};
+    var rows = (transfers.recentFailed || []).map(function (t) {
       return '<tr><td class="mono">' + esc(t.job_id) + '</td>' +
         '<td><span class="badge ' + (t.direction === 'upload' ? 'info' : 'ok') + '">' + esc(t.direction) + '</span></td>' +
         '<td class="dim">' + esc(t.error || '--') + '</td>' +
@@ -1335,49 +1405,34 @@
         '<td>' + esc(t.username || '--') + '</td>' +
         '<td>' + fmtTime(t.updated_at) + '</td></tr>';
     }).join('') || '<tr><td colspan="6" class="empty">No recent failures</td></tr>';
+    return rows;
+  }
 
+  function countsHtml(summary) {
     var files = summary.files || {};
     var counts = summary.counts || {};
-
-    var statsHtml =
-      '<div class="grid stats">' +
+    return '<div class="grid stats">' +
       stat('Files', String(files.count != null ? files.count : 0)) +
       stat('Total bytes', fmtBytes(files.totalBytes)) +
       stat('Users', String(counts.users != null ? counts.users : 0)) +
       stat('Devices', String(counts.devices != null ? counts.devices : 0)) +
       stat('Workspaces', String(counts.workspaces != null ? counts.workspaces : 0)) +
       '</div>';
+  }
 
-    var feedHtml = (summary.recentActivity || []).map(function (a) {
+  function feedHtml(summary) {
+    return (summary.recentActivity || []).map(function (a) {
       var cls = a.level === 'error' ? 'bad' : a.level === 'warning' ? 'warn' : 'info';
       return '<div class="feed-item"><span class="badge ' + cls + '">' + esc(a.level) + '</span>' +
         '<span class="feed-msg">' + esc(a.message) + '</span>' +
         '<span class="feed-time">' + fmtTime(a.created_at) + '</span></div>';
     }).join('') || '<div class="dim">No recent activity</div>';
+  }
 
-    var configHtml = Object.keys(cfg || {}).map(function (k) {
+  function configHtml(cfg) {
+    return Object.keys(cfg || {}).map(function (k) {
       return '<div class="config-item"><div class="config-key">' + esc(k) + '</div><div class="config-val">' + esc(cfg[k]) + '</div></div>';
     }).join('');
-
-    $('#view').innerHTML = page(
-      '<div class="dash-actions card">' +
-      '<button class="btn primary" data-act="run-backup">Run backup now</button>' +
-      '<button class="btn ghost" data-act="dash-pause">Pause auto-refresh</button>' +
-      '<span class="dim small">Last refresh ' + fmtClock(s.time) + (dashPaused ? ' - auto-refresh paused' : ' - auto-refreshes every 5s') + '</span></div>' +
-      section('Server', serverHtml) +
-      section('Gateway nodes', '<div class="nodes-grid">' + nodesHtml + '</div>') +
-      section('Active transfers',
-        '<table class="table"><thead><tr><th>Job</th><th>Direction</th><th>Progress</th><th>Node</th><th>User</th></tr></thead>' +
-        '<tbody>' + activeRows + '</tbody></table>'
-      ) +
-      section('Recent failed transfers',
-        '<table class="table"><thead><tr><th>Job</th><th>Direction</th><th>Error</th><th>Node</th><th>User</th><th>Time</th></tr></thead>' +
-        '<tbody>' + failedRows + '</tbody></table>'
-      ) +
-      section('Storage and counts', statsHtml) +
-      section('Recent activity', feedHtml) +
-      section('Server config', '<div class="config-list">' + configHtml + '</div>')
-    );
   }
 
   function stat(label, value, barPct) {
