@@ -39,6 +39,13 @@ done
 sudo systemctl daemon-reload
 sudo systemctl enable --now nexus-shutdown.path
 
+step "Installing Minecraft control units (dashboard Start/Stop)"
+for unit in nexus-minecraft-start.path nexus-minecraft-start.service nexus-minecraft-stop.path nexus-minecraft-stop.service; do
+  sudo cp "$REPO/deploy/$unit" "/etc/systemd/system/$unit"
+done
+sudo systemctl daemon-reload
+sudo systemctl enable --now nexus-minecraft-start.path nexus-minecraft-stop.path
+
 step "Restarting nexus service"
 sudo systemctl restart nexus
 

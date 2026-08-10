@@ -151,10 +151,16 @@ for unit in nexus.service nexus-export.service nexus-export.timer nexus-shutdown
   [ -f "$DEPLOY_DIR/$unit" ] || die "missing $DEPLOY_DIR/$unit (expected in the deploy/ folder next to this script)"
   $SUDO cp "$DEPLOY_DIR/$unit" "/etc/systemd/system/$unit"
 done
+for unit in nexus-minecraft-start.path nexus-minecraft-start.service nexus-minecraft-stop.path nexus-minecraft-stop.service; do
+  if [ -f "$DEPLOY_DIR/$unit" ]; then
+    $SUDO cp "$DEPLOY_DIR/$unit" "/etc/systemd/system/$unit"
+  fi
+done
 $SUDO systemctl daemon-reload
 $SUDO systemctl enable --now nexus.service
 $SUDO systemctl enable --now nexus-export.timer
 $SUDO systemctl start nexus-export.service || warn "initial export failed (the 5-min timer will retry)"
+$SUDO systemctl enable --now nexus-shutdown.path nexus-minecraft-start.path nexus-minecraft-stop.path 2>/dev/null || true
 $SUDO systemctl enable --now nexus-shutdown.path
 
 step "Firewall"

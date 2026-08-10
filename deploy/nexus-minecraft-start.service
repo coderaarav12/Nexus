@@ -1,0 +1,10 @@
+[Unit]
+Description=Start the Minecraft server on Nexus dashboard request
+
+[Service]
+Type=oneshot
+ExecStartPre=/bin/rm -f /opt/nexus/server/data/system/minecraft.start
+ExecStart=/usr/bin/systemctl start minecraft
+
+[Install]
+WantedBy=multi-user.target

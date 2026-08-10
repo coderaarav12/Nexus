@@ -87,4 +87,6 @@ export const config = {
   // systemd oneshot (nexus-shutdown) reacts by powering off. This avoids
   // needing sudo inside a NoNewPrivileges service.
   shutdownFlagPath: process.env.SHUTDOWN_FLAG ?? path.join(systemDir, 'shutdown.request'),
+  minecraftStartFlagPath: path.join(systemDir, 'minecraft.start'),
+  minecraftStopFlagPath: path.join(systemDir, 'minecraft.stop'),
 };

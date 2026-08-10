@@ -1,0 +1,9 @@
+[Unit]
+Description=Watch for the Nexus Minecraft start request
+
+[Path]
+PathExists=/opt/nexus/server/data/system/minecraft.start
+Unit=nexus-minecraft-start.service
+
+[Install]
+WantedBy=multi-user.target

@@ -480,6 +480,7 @@
     'open-result': function (el) { openSearchResult(el); },
     'run-backup': function () { runBackup(); },
     'shutdown-server': function () { shutdownServer(); },
+    'mc-action': function (el) { minecraftAction(el); },
     'dash-pause': function () { toggleDashPause(); },
     'priv-set-pw': function () { setPrivatePassword(); },
     'priv-unlock': function () { unlockPrivateFolder(); },
@@ -1355,6 +1356,38 @@
     }).catch(function (err) { toast(err.message, 'err'); });
   }
 
+  function loadMinecraft() {
+    var host = $('#dash-minecraft');
+    if (!host) return;
+    request('/monitor/admin/minecraft').then(function (data) {
+      var st = data.status || {};
+      var dot = st.online ? '<span class="badge ok">Online</span>' : '<span class="badge bad">Offline</span>';
+      var players = st.players != null ? (st.players + ' / ' + (st.maxPlayers != null ? st.maxPlayers : '?')) : '-';
+      host.innerHTML =
+        '<div class="config-list">' +
+        '<div class="config-item"><div class="config-key">Status</div><div class="config-val">' + dot + '</div></div>' +
+        '<div class="config-item"><div class="config-key">Address</div><div class="config-val">' + esc(st.host) + ':' + st.port + '</div></div>' +
+        '<div class="config-item"><div class="config-key">Players</div><div class="config-val">' + players + '</div></div>' +
+        '<div class="config-item"><div class="config-key">MOTD</div><div class="config-val mono break">' + esc(st.version || '-') + '</div></div>' +
+        '</div>' +
+        '<div style="margin-top:10px">' +
+        '<button class="btn primary small" data-act="mc-action" data-a="start">Start</button> ' +
+        '<button class="btn ghost small" data-act="mc-action" data-a="stop">Stop</button>' +
+        '</div>';
+    }).catch(function (err) {
+      host.innerHTML = '<p class="dim">' + esc(err.message) + '</p>';
+    });
+  }
+
+  function minecraftAction(el) {
+    var action = el.getAttribute('data-a');
+    if (action === 'stop' && !confirmAction('Stop the Minecraft server? Players will be kicked.')) return;
+    request('/monitor/admin/minecraft/action', { method: 'POST', body: JSON.stringify({ action: action }) }).then(function () {
+      toast('Minecraft ' + action + ' requested', 'ok');
+      setTimeout(loadMinecraft, 2500);
+    }).catch(function (err) { toast(err.message, 'err'); });
+  }
+
   function renderDashboard() {
     clearInterval(dashTimer);
     if (!isAdmin()) { renderAdminRequired(); return; }
@@ -1367,6 +1400,7 @@
       request('/monitor/admin/config'),
     ]).then(function (results) {
       $('#view').innerHTML = renderDashboardHtml(results[0], results[1]);
+      loadMinecraft();
       flashDash();
     }).catch(function (err) {
       $('#view').innerHTML = errHtml(err.message);
@@ -1404,6 +1438,7 @@
       '<button class="btn danger" data-act="shutdown-server">Shut down server</button>' +
       '</div></div>' +
       section('Server', '<div id="dash-server">' + serverHtml(summary.server) + '</div>') +
+      section('Minecraft', '<div id="dash-minecraft"><p class="dim">Loading...</p></div>') +
       section('Gateway nodes', '<div id="dash-nodes">' + nodesHtml(summary) + '</div>') +
       section('Active transfers',
         '<table class="table"><thead><tr><th>Job</th><th>Direction</th><th>Progress</th><th>Node</th><th>User</th></tr></thead>' +

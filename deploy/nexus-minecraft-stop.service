@@ -1,0 +1,10 @@
+[Unit]
+Description=Stop the Minecraft server on Nexus dashboard request
+
+[Service]
+Type=oneshot
+ExecStartPre=/bin/rm -f /opt/nexus/server/data/system/minecraft.stop
+ExecStart=/usr/bin/systemctl stop minecraft
+
+[Install]
+WantedBy=multi-user.target

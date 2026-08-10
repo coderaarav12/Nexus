@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import net from 'node:net';
 import { db } from '../db/database';
 import { config } from '../config';
 import { serverHealth } from '../lib/system';
@@ -172,4 +173,137 @@ export function runServerBackup() {
     fs.rmSync(`${config.backupDir}/${old}`, { recursive: true, force: true });
   }
   return { backup: `backup-${stamp}`, size };
+}
+
+// ---------- Minecraft server integration ----------
+
+const MC_DIR = process.env.MC_DIR ?? '/opt/minecraft';
+const MC_HOST = process.env.MC_HOST ?? '127.0.0.1';
+const MC_PORT = Number(process.env.MC_PORT ?? 25565);
+const MC_RCON_PORT = Number(process.env.MC_RCON_PORT ?? 25575);
+
+function rconPassword(): string | null {
+  try {
+    return fs.readFileSync(`${MC_DIR}/rcon-password`, 'utf8').trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/** Minimal RCON (Source RCON protocol, Minecraft's rcon) client. */
+function rcon(command: string, timeoutMs = 4000): Promise<string | null> {
+  return new Promise((resolve) => {
+    const pass = rconPassword();
+    if (!pass) return resolve(null);
+    const sock = net.createConnection({ host: MC_HOST, port: MC_RCON_PORT });
+    let buf = Buffer.alloc(0);
+    let authed = false;
+    let finished = false;
+
+    const finish = (value: string | null) => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      sock.destroy();
+      resolve(value);
+    };
+    const timer = setTimeout(() => finish(null), timeoutMs);
+
+    const send = (reqId: number, type: number, body: string) => {
+      const bodyBuf = Buffer.from(body + '\0\0', 'utf8');
+      const packet = Buffer.alloc(4 + 4 + 4 + bodyBuf.length);
+      packet.writeInt32LE(4 + 4 + bodyBuf.length, 0);
+      packet.writeInt32LE(reqId, 4);
+      packet.writeInt32LE(type, 8);
+      bodyBuf.copy(packet, 12);
+      sock.write(packet);
+    };
+
+    sock.on('error', () => finish(null));
+    sock.on('close', () => finish(null));
+    sock.on('data', (d) => {
+      buf = Buffer.concat([buf, d]);
+      while (buf.length >= 4) {
+        const len = buf.readInt32LE(0);
+        if (buf.length < 4 + len) break;
+        const id = buf.readInt32LE(4);
+        const type = buf.readInt32LE(8);
+        const body = buf.subarray(12, 4 + len - 2).toString('utf8');
+        buf = buf.subarray(4 + len);
+        if (!authed) {
+          if (id === -1) return finish(null); // auth failed
+          authed = true;
+          send(2, 2, command);
+        } else {
+          // id=2 response carries the command output (type may be 2 or 0).
+          return finish(body);
+        }
+      }
+    });
+    sock.on('connect', () => send(1, 3, pass));
+  });
+}
+
+export interface MinecraftStatus {
+  online: boolean;
+  host: string;
+  port: number;
+  players: number | null;
+  maxPlayers: number | null;
+  version: string | null;
+}
+
+export async function minecraftStatus(): Promise<MinecraftStatus> {
+  const status: MinecraftStatus = {
+    online: false,
+    host: MC_HOST,
+    port: MC_PORT,
+    players: null,
+    maxPlayers: null,
+    version: null,
+  };
+  if (!fs.existsSync(`${MC_DIR}/server.properties`)) return status;
+  try {
+    const props = fs.readFileSync(`${MC_DIR}/server.properties`, 'utf8');
+    const grab = (k: string) => props.match(new RegExp(`^${k}=(.*)$`, 'm'))?.[1];
+    const max = Number(grab('max-players') ?? '10');
+    if (Number.isFinite(max)) status.maxPlayers = max;
+    status.version = grab('motd') ?? null;
+  } catch {
+    /* ignore */
+  }
+
+  const online = await portOpen(MC_HOST, MC_PORT);
+  status.online = online;
+  if (online) {
+    const out = await rcon('list');
+    if (out) {
+      // e.g. "There are 2 of a max of 10 players online: Alice, Bob"
+      const m = out.match(/There are (\d+) of a max of (\d+)/);
+      if (m) {
+        status.players = Number(m[1]);
+        if (Number.isFinite(Number(m[2]))) status.maxPlayers = Number(m[2]);
+      }
+    }
+  }
+  return status;
+}
+
+function portOpen(host: string, port: number, timeoutMs = 1500): Promise<boolean> {
+  return new Promise((resolve) => {
+    const sock = net.createConnection({ host, port });
+    const timer = setTimeout(() => {
+      sock.destroy();
+      resolve(false);
+    }, timeoutMs);
+    sock.on('connect', () => {
+      clearTimeout(timer);
+      sock.end();
+      resolve(true);
+    });
+    sock.on('error', () => {
+      clearTimeout(timer);
+      resolve(false);
+    });
+  });
 }
