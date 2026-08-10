@@ -27,6 +27,14 @@ if [ "$(id -u)" -ne 0 ]; then
   SUDO="sudo"
   $SUDO -v || die "this script needs root (run with sudo or as root)"
 fi
+# Run a command as the 'minecraft' user, whether we are root or in sudoers.
+run_as_minecraft() {
+  if [ "$(id -u)" -eq 0 ]; then
+    su -s /bin/bash minecraft -c "$1"
+  else
+    $SUDO -u minecraft bash -c "$1"
+  fi
+}
 
 MC_VERSION="${MC_VERSION:-1.21.1}"
 FORGE_VERSION="${FORGE_VERSION:-}"
@@ -73,7 +81,7 @@ step "Installing Forge server"
 $SUDO curl -fsSL -o "$MC_DIR/forge-installer.jar" "$INSTALLER_URL"
 $SUDO chown minecraft:minecraft "$MC_DIR/forge-installer.jar"
 if [ ! -f "$MC_DIR/run.sh" ]; then
-  $SUDO -u minecraft bash -c "cd '$MC_DIR' && '$JAVA_BIN' -jar forge-installer.jar --installServer >/dev/null"
+  run_as_minecraft "cd '$MC_DIR' && '$JAVA_BIN' -jar forge-installer.jar --installServer >/dev/null"
   info "forge installer ran"
 else
   info "forge already installed (run.sh present)"
