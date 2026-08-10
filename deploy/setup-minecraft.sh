@@ -104,8 +104,8 @@ if [ ! -f "$RCON_PASS_FILE" ]; then
 else
   RCON_PASS="$($SUDO cat "$RCON_PASS_FILE")"
 fi
-$SUDO chown minecraft:minecraft "$RCON_PASS_FILE"
-$SUDO chmod 600 "$RCON_PASS_FILE"
+$SUDO chown minecraft:nexus "$RCON_PASS_FILE"
+$SUDO chmod 640 "$RCON_PASS_FILE"
 
 $SUDO tee "$MC_DIR/server.properties" >/dev/null <<EOF
 # Nexus-managed Minecraft server
